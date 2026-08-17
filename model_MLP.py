@@ -1,6 +1,9 @@
 from numpy.core.fromnumeric import transpose
-from numpy.lib.arraypad import pad
-from numpy.lib.arraysetops import isin
+
+# from numpy.lib.arraypad import pad
+# from numpy.lib.arraysetops import isin
+from numpy import pad
+from numpy import isin
 import torch.nn as nn
 from torch.nn.modules import dropout
 from torch.nn.modules.activation import ReLU
@@ -46,12 +49,13 @@ class ResMLP(nn.Module):
         super(ResMLP, self).__init__()
 
         self.res_mlp = PreAffinePostLayerScale(
-            dim, depth,
+            dim,
+            depth,
             nn.Sequential(
                 nn.Linear(dim, int(dim * expansion_factor)),
                 active_function,
-                nn.Linear(int(dim * expansion_factor), dim)
-            )
+                nn.Linear(int(dim * expansion_factor), dim),
+            ),
         )
 
     def forward(self, x):
@@ -59,12 +63,15 @@ class ResMLP(nn.Module):
 
 
 class MLPExtractor(nn.Module):
-    def __init__(self, in_channel_len=20,
-                 in_channel_dim=6,
-                 out_channel=20,
-                 res_layer_num=1,
-                 inner_dim=None,
-                 active_func=None):
+    def __init__(
+        self,
+        in_channel_len=20,
+        in_channel_dim=6,
+        out_channel=20,
+        res_layer_num=1,
+        inner_dim=None,
+        active_func=None,
+    ):
         super(MLPExtractor, self).__init__()
 
         if inner_dim is None:
@@ -117,13 +124,16 @@ class MLPExtractor(nn.Module):
 
 
 class MLPReg(nn.Module):
-    def __init__(self, in_size,
-                 out_dim=3,
-                 inner_dims=[80, 50, 20],
-                 res_net_layer=4,
-                 active_fun=None,
-                 batch_norm=None,
-                 dropout=0.5):
+    def __init__(
+        self,
+        in_size,
+        out_dim=3,
+        inner_dims=[80, 50, 20],
+        res_net_layer=4,
+        active_fun=None,
+        batch_norm=None,
+        dropout=0.5,
+    ):
         super(MLPReg, self).__init__()
 
         # self.in_dim = in_dim
@@ -178,7 +188,7 @@ class MLPReg(nn.Module):
     def __initialization(self):
         for m in self.modules():
             if isinstance(m, nn.Linear):
-                nn.init.kaiming_uniform_(m.weight, mode='fan_in', nonlinearity='relu')
+                nn.init.kaiming_uniform_(m.weight, mode="fan_in", nonlinearity="relu")
             elif isinstance(m, nn.BatchNorm1d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
@@ -200,7 +210,7 @@ class MLPCombineNet(nn.Module):
                 "reg_inner_dims": [80, 50, 20],
                 "batch_norm": None,
                 "dropout": 0.5,
-                "out_dim": 3
+                "out_dim": 3,
             }
 
         self.in_channel_len = para["in_channel_len"]
@@ -214,27 +224,33 @@ class MLPCombineNet(nn.Module):
         elif self.active_func_name == "PReLU":
             self.active_function = nn.PReLU()
         else:
-            print('active function name unknown[{0}]'.format(self.active_func_name))
-        self.extractor = MLPExtractor(in_channel_len=para["in_channel_len"],
-                                      in_channel_dim=para["in_channel_dim"],
-                                      out_channel=para["out_channel"],
-                                      res_layer_num=para["res_layer_num"],
-                                      inner_dim=para["inner_dim"],
-                                      active_func=self.active_function)
+            print("active function name unknown[{0}]".format(self.active_func_name))
+        self.extractor = MLPExtractor(
+            in_channel_len=para["in_channel_len"],
+            in_channel_dim=para["in_channel_dim"],
+            out_channel=para["out_channel"],
+            res_layer_num=para["res_layer_num"],
+            inner_dim=para["inner_dim"],
+            active_func=self.active_function,
+        )
 
-        self.reg_input_size = int(para["out_channel"] * para["input_len"] / para["in_channel_len"])
-        print('reg input size:', self.reg_input_size)
+        self.reg_input_size = int(
+            para["out_channel"] * para["input_len"] / para["in_channel_len"]
+        )
+        print("reg input size:", self.reg_input_size)
         self.reg = MLPReg(
             self.reg_input_size,
             active_fun=self.active_function,
             res_net_layer=para["reg_res_layer_num"],
             batch_norm=para["batch_norm"],
-            dropout=para["dropout"]
+            dropout=para["dropout"],
         )
 
     def forward(self, x):
         x = torch.transpose(x, 1, 2)
-        out = x.reshape([x.size(0), int(x.size(1) / self.in_channel_len), -1, self.in_channel_dim])
+        out = x.reshape(
+            [x.size(0), int(x.size(1) / self.in_channel_len), -1, self.in_channel_dim]
+        )
         out = torch.flatten(out, 2)
         out = self.extractor(out)
         out = out.reshape([x.size(0), -1])
